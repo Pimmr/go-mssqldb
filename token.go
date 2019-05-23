@@ -19,6 +19,8 @@ type token byte
 const (
 	tokenReturnStatus token = 121 // 0x79
 	tokenColMetadata  token = 129 // 0x81
+	tokenTabname      token = 164 // 0xA4
+	tokenColInfo      token = 165 // 0xA5
 	tokenOrder        token = 169 // 0xA9
 	tokenError        token = 170 // 0xAA
 	tokenInfo         token = 171 // 0xAB
@@ -516,6 +518,39 @@ func parseInfo(r *tdsBuffer) (res Error) {
 	return
 }
 
+// https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-tds/140e3348-da08-409a-b6c3-f0fc9cee2d6e
+func parseTableNames(r *tdsBuffer) (tables []tableStruct) {
+	length := r.uint16()
+	_ = length // ignore length
+	parts := int(r.byte())
+	for i := 0; i < parts; i++ {
+		tables = append(tables, tableStruct{
+			TableName: r.UsVarChar(),
+		})
+	}
+
+	return
+}
+
+// https://docs.microsoft.com/en-us/openspecs/windows_protocols/ms-tds/aa8466c5-ca3d-48ca-a638-7c1becebe754
+func parseColumnInfo(r *tdsBuffer) (cinfos []columnInfoStruct) {
+	length := int(r.uint16())
+	startPos := r.rpos
+	for r.rpos < startPos+length {
+		var ci columnInfoStruct
+
+		ci.ColNum = uint8(r.byte())
+		ci.TableNum = uint8(r.byte())
+		ci.Status = columnInfoStatus(r.byte())
+		if ci.Status & columnInfoStatusDifferentName > 0 {
+			ci.ColName = r.BVarChar()
+		}
+		cinfos = append(cinfos, ci)
+	}
+
+	return
+}
+
 // https://msdn.microsoft.com/en-us/library/dd303881.aspx
 func parseReturnValue(r *tdsBuffer) (nv namedValue) {
 	/*
@@ -645,6 +680,10 @@ func processSingleResponse(sess *tdsSession, ch chan tokenStruct, outs map[strin
 					}
 				}
 			}
+		case tokenColInfo:
+			_ = parseColumnInfo(sess.buf) // Ignore the columns info, not used
+		case tokenTabname:
+			_ = parseTableNames(sess.buf) // Ignore the table names, not used
 		default:
 			badStreamPanic(fmt.Errorf("unknown token type returned: %v", token))
 		}

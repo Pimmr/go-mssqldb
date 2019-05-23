@@ -152,6 +152,28 @@ type columnStruct struct {
 	ti       typeInfo
 }
 
+type tableStruct struct {
+	TableName string
+}
+
+type columnInfoStatus byte
+
+//go:generate stringer -type columnInfoStatus
+
+const (
+	columnInfoStatusExpression columnInfoStatus = 0x04
+	columnInfoStatusKey columnInfoStatus = 0x08
+	columnInfoStatusHidden columnInfoStatus = 0x10
+	columnInfoStatusDifferentName columnInfoStatus = 0x20
+)
+
+type columnInfoStruct struct{
+	ColNum uint8
+	TableNum uint8
+	Status columnInfoStatus
+	ColName string
+}
+
 type keySlice []uint8
 
 func (p keySlice) Len() int           { return len(p) }
